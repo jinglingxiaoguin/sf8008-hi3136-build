@@ -1,55 +1,45 @@
 name: Build SF8008 Kernel
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build-kernel:
-    runs-on: ubuntu-22.04
-
-    env:
-      ARCH: arm
-      CROSS_COMPILE: arm-linux-gnueabihf-
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout kernel source
-        uses: actions/checkout@v4
+    - name: Checkout Repository
+      uses: actions/checkout@v3
 
-      - name: Set up toolchain and dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-arm-linux-gnueabihf \
-            make \
-            bc \
-            libncurses-dev \
-            bison \
-            flex \
-            libssl-dev \
-            cpio \
-            u-boot-tools \
-            device-tree-compiler \
-            build-essential
+    - name: Install Toolchain & Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-arm-linux-gnueabihf make bc libncurses-dev flex bison
 
-      - name: Copy sf8008 config to kernel/.config
-        run: |
+    - name: Download Kernel Source
+      run: |
+        mkdir kernel
+        wget -qO - https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.4.35.tar.xz | tar -xJ --strip-components=1 -C kernel
+
+    - name: Copy Config
+      run: |
           wget https://raw.githubusercontent.com/jinglingxiaoguin/sf8008-hi3136-build/main/sf8008.config -O .config
 
-      - name: Build kernel
-        working-directory: ./kernel
-        run: |
-          make olddefconfig
-          make -j$(nproc)
+    - name: Build Kernel
+      working-directory: ./kernel
+      env:
+        ARCH: arm
+        CROSS_COMPILE: arm-linux-gnueabihf-
+      run: |
+        make olddefconfig
+        make -j$(nproc)
 
-      - name: Pack output
-        run: |
-          mkdir -p output
-          cp kernel/arch/arm/boot/zImage output/
-          cp kernel/arch/arm/boot/dts/*.dtb output/ || true
-          find kernel -name "*.ko" -exec cp {} output/ \;
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: sf8008-kernel-output
-          path: output
+    - name: Upload zImage
+      uses: actions/upload-artifact@v3
+      with:
+        name: sf8008-zImage
+        path: kernel/arch/arm/boot/zImage
