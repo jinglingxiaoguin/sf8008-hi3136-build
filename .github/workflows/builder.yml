@@ -15,7 +15,7 @@ jobs:
       - name: Checkout kernel source
         uses: actions/checkout@v4
 
-      - name: Set up toolchain
+      - name: Set up toolchain and dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -31,23 +31,24 @@ jobs:
             device-tree-compiler \
             build-essential
 
-      - name: Copy sf8008 config
+      - name: Copy sf8008 config to kernel/.config
         run: |
           wget https://raw.githubusercontent.com/jinglingxiaoguin/sf8008-hi3136-build/main/sf8008.config -O .config
 
-      - name: Start kernel build
+      - name: Build kernel
+        working-directory: ./kernel
         run: |
           make olddefconfig
           make -j$(nproc)
 
-      - name: Pack build output
+      - name: Pack output
         run: |
           mkdir -p output
-          cp arch/arm/boot/zImage output/
-          cp arch/arm/boot/dts/*.dtb output/ || true
-          find . -name "*.ko" -exec cp {} output/ \;
+          cp kernel/arch/arm/boot/zImage output/
+          cp kernel/arch/arm/boot/dts/*.dtb output/ || true
+          find kernel -name "*.ko" -exec cp {} output/ \;
 
-      - name: Upload artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: sf8008-kernel-output
