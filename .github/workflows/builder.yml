@@ -1,43 +1,45 @@
-name: Build hi3136.ko for SF8008
+name: Build SF8008 HiSilicon Kernel Modules
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Build hi3136 module
-
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y git wget build-essential bc flex bison libssl-dev libncurses-dev u-boot-tools
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y gcc-arm-linux-gnueabihf make git bc bison flex libssl-dev libncurses-dev
 
-      - name: Clone kernel
-        run: |
-          git clone --depth=1 https://github.com/leandrotsampa/hisilicon-kernel.git
-          cd hisilicon-kernel
-          wget https://raw.githubusercontent.com/你的用户名/你的仓库名/main/sf8008.config -O .config
-          make ARCH=arm olddefconfig
-          make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- modules_prepare
+    - name: Clone kernel source
+      run: |
+        git clone --depth=1 https://github.com/leandrotsampa/hisilicon-kernel kernel
 
-      - name: Clone dvb-hisi
-        run: |
-          git clone https://github.com/leandrotsampa/dvb-hisi.git
+    - name: Copy config
+      run: |
+        cp sf8008.config kernel/.config
 
-      - name: Build module
-        run: |
-          export KDIR=$PWD/hisilicon-kernel
-          export ARCH=arm
-          export CROSS_COMPILE=arm-linux-gnueabi-
-          make -C $KDIR M=$PWD/dvb-hisi modules
+    - name: Build kernel modules
+      working-directory: kernel
+      run: |
+        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- olddefconfig
+        make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules -j$(nproc)
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: hi3136-ko
-          path: dvb-hisi/*.ko
+    - name: Archive .ko modules
+      run: |
+        mkdir -p out
+        find kernel -name '*.ko' -exec cp {} out/ \;
+        zip -r sf8008_modules.zip out/
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: sf8008_modules
+        path: sf8008_modules.zip
