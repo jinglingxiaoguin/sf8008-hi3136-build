@@ -39,7 +39,7 @@ jobs:
         zip -r sf8008_modules.zip out/
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: sf8008_modules
         path: sf8008_modules.zip
