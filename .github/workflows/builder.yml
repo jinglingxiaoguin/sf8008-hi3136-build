@@ -39,7 +39,8 @@ jobs:
         make -j$(nproc)
 
     - name: Upload zImage
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: sf8008-zImage
-        path: kernel/arch/arm/boot/zImage
+        name: sf8008-kernel-output
+        path: output
+
