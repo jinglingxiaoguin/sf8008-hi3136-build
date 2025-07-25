@@ -33,7 +33,7 @@ jobs:
 
       - name: Copy sf8008 config
         run: |
-          wget https://raw.githubusercontent.com/jinglingxiaoguin/sf8008-hi3136-build/blob/main/sf8008.config -O .config
+          wget https://raw.githubusercontent.com/jinglingxiaoguin/sf8008-hi3136-build/main/sf8008.config -O .config
 
       - name: Start kernel build
         run: |
