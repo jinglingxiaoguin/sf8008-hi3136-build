@@ -1,4 +1,4 @@
-name: Build OpenATV 7.5.1 for SF8008
+name: Build OpenATV for SF8008
 
 on:
   workflow_dispatch:
