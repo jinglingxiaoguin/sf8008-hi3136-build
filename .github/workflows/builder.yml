@@ -38,7 +38,8 @@ jobs:
 
       - name: Clone build environment
         run: |
-          git clone https://github.com/oe-alliance/build-enviroment.git -b 5.5.1 openatv
+          git clone https://github.com/oe-alliance/build-enviroment.git -b 5.5.1
+
           cd openatv
           make update
 
