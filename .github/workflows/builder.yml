@@ -1,3 +1,4 @@
+---
 name: Build OpenATV for SF8008
 
 on:
@@ -10,19 +11,15 @@ jobs:
     timeout-minutes: 360 # 设置超时时间为 6 小时
 
     steps:
-      - name: Checkout OpenATV Source
-        # 由于你的构建逻辑是先克隆 build-enviroment，这里可以不用先 checkout 整个仓库
-        # 或者如果你想在当前仓库下运行这个工作流，并且该仓库是 openatv/enigma2 的 fork，
-        # 则可以保留 actions/checkout@v4，但要注意路径管理。
-        # 如果这个 workflow 文件是放在 openatv/enigma2 仓库的根目录下，
-        # 那么这一步可能不需要，因为后续的 git clone build-enviroment 是在独立的 openatv 目录。
-        # 这里为了确保初始环境干净，暂时不克隆 openatv/enigma2 源码。
-        # 如果你后续需要基于 openatv/enigma2 做改动，则需要在这里添加 actions/checkout。
+      # 移除了 'Checkout OpenATV Source' 步骤，因为它是空的，导致了 'uses' 或 'run' 错误。
+      # 如果你的 workflow 文件在 openatv/enigma2 的 fork 仓库中，并且你需要访问该仓库的内容，
+      # 那么你应该在此处添加以下行：
+      # - name: Checkout current repository
+      #   uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
           sudo apt-get update
-          # 注意：如果在容器中运行，通常不需要 sudo。但在 ubuntu-22.04 裸机运行器上需要。
           sudo apt-get install -y --no-install-recommends \
             autoconf automake bison bzip2 chrpath cmake coreutils cpio curl cvs \
             debianutils default-jre-headless diffstat flex g++ gawk gcc gcc-12 \
@@ -38,7 +35,7 @@ jobs:
           sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
           sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
           sudo update-alternatives --set python /usr/bin/python3
-          sudo ln -sf /bin/bash /bin/sh # 在运行器环境中设置，通常不会有负面影响
+          sudo ln -sf /bin/bash /bin/sh
           echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
           sudo sysctl -n -w fs.inotify.max_user_watches=524288
           echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/60-apparmor-namespace.conf > /dev/null
@@ -56,7 +53,6 @@ jobs:
           make update
 
       - name: Add meta-local with dvb-hisi recipe
-        # 使用单个 printf 块来生成 recipe 文件，避免重复和语法错误
         run: |
           mkdir -p openatv/meta-local/recipes-dvb/dvb-hisi/files
           printf '%s\n' \
@@ -87,24 +83,12 @@ jobs:
             '}' \
             > openatv/meta-local/recipes-dvb/dvb-hisi/dvb-hisi_git.bb
           
-          # 接下来，我们需要告诉 OpenATV 的编译系统这个新的 meta-local 层。
-          # 通常是通过修改 bblayers.conf 或 local.conf。
-          # 在 oe-alliance 的 build-enviroment 中，这通常在 conf/bblayers.conf 或 setup_oe.sh 生成的文件中。
-          # 一个常见的方法是添加一个 layer 到 BBLAYERS 变量。
-          # 假设 build-enviroment 已经初始化了 conf/bblayers.conf，我们可以追加。
-          # 注意：这里的路径是相对于 build-enviroment 根目录的。
-          echo 'BBLAYERS += "${OEROOT}/meta-local"' >> openatv/builds/openatv/release/bblayers.conf.sample # 或者实际使用的 bblayers.conf 文件
-          echo 'IMAGE_INSTALL_append = " dvb-hisi"' >> openatv/builds/openatv/release/local.conf # 确保镜像包含你的驱动
-
-          # 实际路径可能更复杂，你需要根据 build-enviroment 实际生成的 conf 文件来确定。
-          # 通常，local.conf 和 bblayers.conf 会在 `make init` 或 `make update` 后生成在 `builds/openatv/release` 目录下。
-          # 确保你在正确的文件中添加了层和包。
+          echo 'BBLAYERS += "${OEROOT}/meta-local"' >> openatv/builds/openatv/release/bblayers.conf
+          echo 'IMAGE_INSTALL_append = " dvb-hisi"' >> openatv/builds/openatv/release/local.conf
           echo "DVB-Hisi recipe and layer configuration added."
 
-
       - name: Build Enigma2 image
-        # 这一步需要进入到 build-enviroment 目录中执行
-        working-directory: openatv # 这里是指 git clone 的 openatv 目录
+        working-directory: openatv
         run: |
           MACHINE=sf8008 DISTRO=openatv DISTRO_TYPE=release make enigma2-image
 
@@ -113,10 +97,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sf8008-enigma2-image
-          # 这里的路径需要非常精确，通常在 builds/openatv/release/<MACHINE>/tmp/deploy/images/<MACHINE>/
-          # 但 tmp 目录下的文件会在编译完成后移动到上一级目录，所以通常是 images/<MACHINE>
-          # 建议你本地运行一次，确认最终镜像文件的准确路径。
           path: openatv/builds/openatv/release/sf8008/images/sf8008/
-          # 如果想上传所有 .zip 或 .bin 文件，可以使用通配符
-          # path: openatv/builds/openatv/release/sf8008/images/sf8008/*.zip
-          # path: openatv/builds/openatv/release/sf8008/images/sf8008/*.bin
