@@ -10,56 +10,77 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Checkout this repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install required packages
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y autoconf automake bison bzip2 chrpath cmake \
-            coreutils cpio curl cvs debianutils default-jre default-jre-headless \
-            diffstat flex g++ gawk gcc gcc-12 gcc-multilib g++-multilib gettext \
-            git gzip help2man info iputils-ping java-common libc6-dev \
-            libglib2.0-dev libncurses-dev libperl4-corelibs-perl \
-            libproc-processtable-perl libtool libtool-bin locales \
-            lz4 nano ninja-build openssh-client patch pkg-config \
-            python3 python3-distutils python3-git python3-jinja2 \
-            python3-pip python3-pexpect python3-ply python3-subunit \
-            python3-virtualenv rsync screen socat subversion texi2html \
-            texinfo unzip wget xmlto xz-utils zstd
+          sudo apt-get install -y autoconf automake bison bzip2 chrpath cmake coreutils cpio curl cvs \
+            debianutils default-jre default-jre-headless diffstat flex g++ gawk gcc gcc-12 \
+            gcc-multilib g++-multilib gettext git gzip help2man info iputils-ping java-common \
+            libc6-dev libglib2.0-dev libncurses-dev libperl4-corelibs-perl libproc-processtable-perl \
+            libsdl1.2-dev libserf-dev libtool libxml2-utils make ncurses-bin patch perl pkg-config \
+            psmisc python3 python3-git python3-jinja2 python3-pexpect python3-pip python3-setuptools \
+            quilt socat sshpass subversion tar texi2html texinfo unzip wget xsltproc xterm xz-utils \
+            zip zlib1g-dev zstd fakeroot lz4 git-lfs
 
-      - name: Clone oe-alliance-core
+      - name: Set up python and shell
         run: |
-          git clone https://github.com/OpenATV/oe-alliance-core.git
-          cd oe-alliance-core
-          git checkout 5.5.1
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+          sudo update-alternatives --set python /usr/bin/python3
+          sudo ln -sf /bin/bash /bin/sh
+          echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+          sudo sysctl -n -w fs.inotify.max_user_watches=524288
+          echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/60-apparmor-namespace.conf
+          sudo sysctl --system
 
-      - name: Clone LeandroTsampa's kernel and dvb-hisi
+      - name: Clone build environment
         run: |
-          cd oe-alliance-core
-          mkdir -p meta-mysf8008/recipes-kernel/linux
-          git clone https://github.com/leandrotsampa/linux-4.4.35.git \
-            meta-mysf8008/recipes-kernel/linux/linux-leandrotsampa
-          git clone https://github.com/leandrotsampa/dvb-hisi.git \
-            meta-mysf8008/recipes-dvb/dvb-hisi
+          git clone https://github.com/oe-alliance/build-enviroment.git -b 5.5.1 openatv
+          cd openatv
+          make update
 
-      - name: Apply custom layer to bblayers.conf and local.conf
+      - name: Add dvb-hisi driver recipe
         run: |
-          cd oe-alliance-core
-          echo 'BBLAYERS += "${TOPDIR}/meta-mysf8008"' >> conf/bblayers.conf
-          echo 'MACHINE = "sf8008"' > conf/local.conf
-          echo 'DISTRO = "openatv"' >> conf/local.conf
-          echo 'IMAGE_FSTYPES += "tar.xz"' >> conf/local.conf
+          mkdir -p openatv/meta-local/recipes-dvb/dvb-hisi/files
+          cat << 'EOF' > openatv/meta-local/recipes-dvb/dvb-hisi/dvb-hisi_git.bb
+DESCRIPTION = "HiSilicon DVB driver from leandrotsampa"
+LICENSE = "GPLv2"
+LIC_FILES_CHKSUM = "file://COPYING;md5=751419260aa954499f7abaabaa882bbe"
 
-      - name: Build image
+SRCREV = "${AUTOREV}"
+PV = "1.0+git${SRCPV}"
+PR = "r0"
+
+SRC_URI = "git://github.com/leandrotsampa/dvb-hisi.git;protocol=https;branch=main"
+S = "${WORKDIR}/git"
+
+inherit module
+
+DEPENDS += "virtual/kernel"
+
+EXTRA_OEMAKE += "KERNELDIR=${STAGING_KERNEL_DIR}"
+
+do_compile() {
+    oe_runmake
+}
+
+do_install() {
+    install -d ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra
+    install -m 0644 *.ko ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra
+}
+EOF
+
+      - name: Build Enigma2 image
         run: |
-          cd oe-alliance-core
-          source ./env.source
-          MACHINE=sf8008 DISTRO=openatv make image -j$(nproc)
+          cd openatv
+          MACHINE=sf8008 DISTRO=openatv DISTRO_TYPE=release make enigma2-image
 
-      - name: Archive built image
+      - name: Upload image (optional)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: sf8008-openatv-image
-          path: |
-            oe-alliance-core/builds/sf8008/tmp/deploy/images/sf8008/
+          name: sf8008-enigma2-image
+          path: openatv/builds/openatv/release/sf8008/tmp/deploy/images/sf8008/
