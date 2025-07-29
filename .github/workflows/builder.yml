@@ -11,9 +11,10 @@ jobs:
     timeout-minutes: 360 # 设置超时时间为 6 小时
 
     steps:
-      # 移除了 'Checkout OpenATV Source' 步骤，因为它是空的，导致了 'uses' 或 'run' 错误。
-      # 如果你的 workflow 文件在 openatv/enigma2 的 fork 仓库中，并且你需要访问该仓库的内容，
-      # 那么你应该在此处添加以下行：
+      # **注意：** 确认你不需要在这里克隆你自己的仓库。
+      # 如果你的 .github/workflows/build.yml 文件在你想要编译的 OpenATV 源码仓库（或者它的 fork）里，
+      # 并且你需要访问该仓库的内容（例如你的自定义配置），那么你需要取消下面这行的注释。
+      # 如果你只需要克隆 oe-alliance/build-enviroment，则无需此步骤。
       # - name: Checkout current repository
       #   uses: actions/checkout@v4
 
@@ -83,12 +84,15 @@ jobs:
             '}' \
             > openatv/meta-local/recipes-dvb/dvb-hisi/dvb-hisi_git.bb
           
+          # 将 meta-local 层添加到 bblayers.conf
+          # 假设 bblayers.conf 在 openatv/builds/openatv/release/ 目录下
           echo 'BBLAYERS += "${OEROOT}/meta-local"' >> openatv/builds/openatv/release/bblayers.conf
+          # 确保 IMAGE_INSTALL 包含 dvb-hisi
           echo 'IMAGE_INSTALL_append = " dvb-hisi"' >> openatv/builds/openatv/release/local.conf
           echo "DVB-Hisi recipe and layer configuration added."
 
       - name: Build Enigma2 image
-        working-directory: openatv
+        working-directory: openatv # 确保在这里执行 make 命令
         run: |
           MACHINE=sf8008 DISTRO=openatv DISTRO_TYPE=release make enigma2-image
 
