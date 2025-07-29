@@ -8,7 +8,6 @@ jobs:
     runs-on: ubuntu-22.04
     name: Build SF8008 Image
     timeout-minutes: 360
-
     steps:
       - name: Install dependencies
         run: |
@@ -87,4 +86,3 @@ jobs:
         with:
           name: sf8008-enigma2-image
           path: openatv/builds/openatv/release/sf8008/tmp/deploy/images/sf8008/
-
