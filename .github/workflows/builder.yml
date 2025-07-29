@@ -1,46 +1,92 @@
-name: Build SF8008 Kernel
+name: Build OpenATV 7.5.1 for SF8008
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build-kernel:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-22.04
+    name: Build SF8008 Image
+    timeout-minutes: 360
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake bison bzip2 chrpath cmake coreutils cpio curl cvs \
+            debianutils default-jre default-jre-headless diffstat flex g++ gawk gcc gcc-12 \
+            gcc-multilib g++-multilib gettext git gzip help2man info iputils-ping java-common \
+            libc6-dev libglib2.0-dev libncurses-dev libperl4-corelibs-perl libproc-processtable-perl \
+            libsdl1.2-dev libserf-dev libtool libxml2-utils make ncurses-bin patch perl pkg-config \
+            psmisc python3 python3-git python3-jinja2 python3-pexpect python3-pip python3-setuptools \
+            quilt socat sshpass subversion tar texi2html texinfo unzip wget xsltproc xterm xz-utils \
+            zip zlib1g-dev zstd fakeroot lz4 git-lfs
 
-    - name: Install Toolchain & Dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-arm-linux-gnueabihf make bc libncurses-dev flex bison
+      - name: Set up python and shell
+        run: |
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 1
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+          sudo update-alternatives --set python /usr/bin/python3
+          sudo ln -sf /bin/bash /bin/sh
+          echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf
+          sudo sysctl -n -w fs.inotify.max_user_watches=524288
+          echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/60-apparmor-namespace.conf
+          sudo sysctl --system
 
-    - name: Download Kernel Source
-      run: |
-        mkdir kernel
-        wget -qO - https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.4.35.tar.xz | tar -xJ --strip-components=1 -C kernel
+      - name: Checkout build-enviroment (oe-alliance-core)
+        run: |
+          git clone https://github.com/oe-alliance/build-enviroment.git -b 5.5.1 openatv
+          cd openatv
+          make update
 
-    - name: Copy Config
-      run: |
-          wget https://raw.githubusercontent.com/jinglingxiaoguin/sf8008-hi3136-build/main/sf8008.config -O .config
+      - name: Add meta-local with dvb-hisi recipe
+        run: |
+          mkdir -p openatv/meta-local/recipes-dvb/dvb-hisi/files
+          cat > openatv/meta-local/recipes-dvb/dvb-hisi/dvb-hisi_git.bb <<'EOF'
+DESCRIPTION = "HiSilicon DVB driver from leandrotsampa"
+LICENSE = "GPLv2"
+LIC_FILES_CHKSUM = "file://COPYING;md5=751419260aa954499f7abaabaa882bbe"
 
-    - name: Build Kernel
-      working-directory: ./kernel
-      env:
-        ARCH: arm
-        CROSS_COMPILE: arm-linux-gnueabihf-
-      run: |
-        make olddefconfig
-        make -j$(nproc)
+SRCREV = "${AUTOREV}"
+PV = "1.0+git${SRCPV}"
+PR = "r0"
 
-    - name: Upload zImage
-      uses: actions/upload-artifact@v4
-      with:
-        name: sf8008-kernel-output
-        path: output
+SRC_URI = "git://github.com/leandrotsampa/dvb-hisi.git;protocol=https;branch=main"
+S = "${WORKDIR}/git"
+
+inherit module
+
+DEPENDS += "virtual/kernel"
+
+EXTRA_OEMAKE += "KERNELDIR=${STAGING_KERNEL_DIR}"
+
+do_compile() {
+    oe_runmake
+}
+
+do_install() {
+    install -d ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra
+    install -m 0644 *.ko ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra
+}
+EOF
+
+      - name: Configure layer and build environment
+        run: |
+          cd openatv
+          MACHINE=sf8008 DISTRO=openatv DISTRO_TYPE=release make init
+
+          echo 'BBLAYERS += "${TOPDIR}/../meta-local"' >> builds/openatv/release/sf8008/conf/bblayers.conf
+          echo 'IMAGE_INSTALL:append = " dvb-hisi"' >> builds/openatv/release/sf8008/conf/local.conf
+
+      - name: Build Enigma2 image
+        run: |
+          cd openatv
+          MACHINE=sf8008 DISTRO=openatv DISTRO_TYPE=release make enigma2-image
+
+      - name: Upload image (if needed)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sf8008-enigma2-image
+          path: openatv/builds/openatv/release/sf8008/tmp/deploy/images/sf8008/
 
