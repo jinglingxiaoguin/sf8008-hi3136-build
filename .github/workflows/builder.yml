@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-22.04
     name: Build SF8008 Image
     timeout-minutes: 360
+
     steps:
       - name: Install dependencies
         run: |
@@ -41,39 +42,41 @@ jobs:
       - name: Add meta-local with dvb-hisi recipe
         run: |
           mkdir -p openatv/meta-local/recipes-dvb/dvb-hisi/files
-          cat > openatv/meta-local/recipes-dvb/dvb-hisi/dvb-hisi_git.bb <<'EOF'
 
-    - name: Add meta-local with dvb-hisi recipe
-      run: |
-        mkdir -p openatv/meta-local/recipes-dvb/dvb-hisi/files
-    
-        printf '%s\n' \
-          'DESCRIPTION = "HiSilicon DVB driver from leandrotsampa"' \
-          'LICENSE = "GPLv2"' \
-          'LIC_FILES_CHKSUM = "file://COPYING;md5=751419260aa954499f7abaabaa882bbe"' \
-          '' \
-          'SRCREV = "${AUTOREV}"' \
-          'PV = "1.0+git${SRCPV}"' \
-          'PR = "r0"' \
-          '' \
-          'SRC_URI = "git://github.com/leandrotsampa/dvb-hisi.git;protocol=https;branch=main"' \
-          'S = "${WORKDIR}/git"' \
-          '' \
-          'inherit module' \
-          '' \
-          'DEPENDS += "virtual/kernel"' \
-          '' \
-          'EXTRA_OEMAKE += "KERNELDIR=${STAGING_KERNEL_DIR}"' \
-          '' \
-          'do_compile() {' \
-          '    oe_runmake' \
-          '}' \
-          '' \
-          'do_install() {' \
-          '    install -d ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra' \
-          '    install -m 0644 *.ko ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra' \
-          '}' \
-          > openatv/meta-local/recipes-dvb/dvb-hisi/dvb-hisi_git.bb
+          printf '%s\n' \
+            'DESCRIPTION = "HiSilicon DVB driver from leandrotsampa"' \
+            'LICENSE = "GPLv2"' \
+            'LIC_FILES_CHKSUM = "file://COPYING;md5=751419260aa954499f7abaabaa882bbe"' \
+            '' \
+            'SRCREV = "${AUTOREV}"' \
+            'PV = "1.0+git${SRCPV}"' \
+            'PR = "r0"' \
+            '' \
+            'SRC_URI = "git://github.com/leandrotsampa/dvb-hisi.git;protocol=https;branch=main"' \
+            'S = "${WORKDIR}/git"' \
+            '' \
+            'inherit module' \
+            '' \
+            'DEPENDS += "virtual/kernel"' \
+            '' \
+            'EXTRA_OEMAKE += "KERNELDIR=${STAGING_KERNEL_DIR}"' \
+            '' \
+            'do_compile() {' \
+            '    oe_runmake' \
+            '}' \
+            '' \
+            'do_install() {' \
+            '    install -d ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra' \
+            '    install -m 0644 *.ko ${D}${nonarch_base_libdir}/modules/${KERNEL_VERSION}/extra' \
+            '}' \
+            > openatv/meta-local/recipes-dvb/dvb-hisi/dvb-hisi_git.bb
+
+      - name: Configure build environment
+        run: |
+          cd openatv
+          MACHINE=sf8008 DISTRO=openatv DISTRO_TYPE=release make init
+          echo 'BBLAYERS += "${TOPDIR}/../meta-local"' >> builds/openatv/release/sf8008/conf/bblayers.conf
+          echo 'IMAGE_INSTALL:append = " dvb-hisi"' >> builds/openatv/release/sf8008/conf/local.conf
 
       - name: Build Enigma2 image
         run: |
